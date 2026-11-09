@@ -40,6 +40,7 @@ class BmsConnection(
     val lastError = MutableStateFlow<String?>(null)
     private var job: Job? = null
     private var knownProtocol: ProtocolKind? = null
+    private var softFailures = 0
 
     private sealed interface Outcome {
         data class Retry(val reason: String) : Outcome
@@ -49,10 +50,11 @@ class BmsConnection(
     fun start(address: String) {
         stop()
         knownProtocol = null
+        softFailures = 0
         job = scope.launch {
             val policy = ReconnectPolicy()
             while (isActive) {
-                when (val o = runSession(address) { policy.reset() }) {
+                when (val o = runSession(address) { policy.reset(); softFailures = 0 }) {
                     is Outcome.Fatal -> { state.value = LinkState.Failed(o.reason); return@launch }
                     is Outcome.Retry -> {
                         lastError.value = o.reason
@@ -81,17 +83,27 @@ class BmsConnection(
             state.value = LinkState.Connecting
             if (!session.connect(15_000)) return Outcome.Retry("تعذّر الاتصال بالجهاز (قد يكون بعيدًا أو متصلًا بتطبيق آخر).")
             state.value = LinkState.Discovering
-            val services = session.discoverServices() ?: return Outcome.Retry("تعذّر قراءة خدمات الجهاز.")
-            val link = UartLink.find(session, services)
-                ?: return Outcome.Fatal("الجهاز لا يحتوي خدمة البيانات المتوقعة (FF00/FF01/FF02). شغّل «فحص الاتصال» وأرسل التقرير.")
+            delay(600) // بعض الوحدات تُرجع قائمة خدمات ناقصة إن طُلبت فور الاتصال
+            var link: UartLink? = null
+            for (attempt in 0 until 3) {
+                val services = session.discoverServices() ?: return Outcome.Retry("تعذّر قراءة خدمات الجهاز.")
+                link = UartLink.find(session, services)
+                if (link != null || !session.connected) break
+                delay(1_000)
+            }
+            if (link == null) {
+                // لا نعتبره عطلًا نهائيًا إن سبق أن قرأنا من هذا الجهاز، أو قبل تكرار الفشل ثلاث جلسات.
+                return if (knownProtocol != null || ++softFailures < 3) Outcome.Retry("لم تظهر خدمة البيانات بعد — نعيد المحاولة.")
+                else Outcome.Fatal("الجهاز لا يحتوي خدمة البيانات المتوقعة (FF00/FF01/FF02). شغّل «فحص الاتصال» وأرسل التقرير.")
+            }
             if (!session.enableNotifications(link.notifyChar)) return Outcome.Retry("تعذّر تفعيل استقبال البيانات.")
             delay(400)
             state.value = LinkState.Probing
             val protocol = knownProtocol ?: probe(link)
             if (protocol == null) {
-                return if (session.connected)
+                return if (session.connected && ++softFailures >= 3)
                     Outcome.Fatal("اتصلنا بالجهاز لكنه لم يردّ على طلبات القراءة المعروفة. قد يحتاج مصادقة أو يستخدم بروتوكولًا مختلفًا. شغّل «فحص الاتصال» وأرسل التقرير.")
-                else Outcome.Retry("انقطع الاتصال أثناء التعرف على الجهاز.")
+                else Outcome.Retry("لم يكتمل التعرف على الجهاز — نعيد المحاولة.")
             }
             knownProtocol = protocol
             state.value = LinkState.Live(protocol)

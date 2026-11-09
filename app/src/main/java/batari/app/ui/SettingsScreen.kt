@@ -49,6 +49,7 @@ fun SettingsScreen(
     mode: SourceMode,
     update: ((AppSettings) -> AppSettings) -> Unit,
     onOpenConnect: () -> Unit,
+    onOpenCloud: () -> Unit,
     onToggleDemo: (Boolean) -> Unit,
     onEnableAlert: () -> Unit,
 ) {
@@ -67,6 +68,11 @@ fun SettingsScreen(
             Stepper("قراءة جديدة كل", s.pollSeconds, " ث", 1, 2..60) { v -> update { it.copy(pollSeconds = v) } }
             Stepper("رقم المجموعة (PACK)", s.packAddress, "", 1, 0..15) { v -> update { it.copy(packAddress = v) } }
             Note("رقم المجموعة يُستخدم في بروتوكول سلسلة UP فقط. اتركه 1 إن كان التطبيق الأصلي يعرض PACK1.")
+        }
+
+        Panel(title = "سيرفر البطارية (تجريبي)") {
+            Text("للمراقبة من بعيد بحساب JBD نفسه، ما دامت البطارية موصولة بالواي فاي.")
+            Button(onClick = onOpenCloud) { Text("حساب JBD وفحص السيرفر") }
         }
 
         Panel(title = "الحسابات (لا تغيّر شيئًا في البطارية)") {
@@ -100,8 +106,8 @@ fun SettingsScreen(
 
         Panel(title = "الخصوصية والأمان") {
             Toggle("إخفاء المعرّفات في التقارير والإعدادات", s.maskIdentifiers) { v -> update { it.copy(maskIdentifiers = v) } }
-            Text("• التطبيق بلا حساب وبلا خادم، ولا يملك إذن الإنترنت أصلًا.")
-            Text("• القراءات والسجل محفوظة على هذا الهاتف فقط.")
+            Text("• البلوتوث يعمل بلا حساب وبلا إنترنت. الإنترنت يُستخدم فقط إذا سجّلت دخولك بحساب JBD، ولا يتصل التطبيق إلا بخادم JBD نفسه.")
+            Text("• القراءات والسجل محفوظة على هذا الهاتف فقط. كلمة المرور لا تُحفظ، ورمز الدخول يُحفظ مشفّرًا.")
             Text("• للقراءة فقط: التطبيق يرسل طلبات قراءة محددة، ولا يحتوي أي أمر يغيّر إعدادات البطارية أو يشغّل/يوقف الشحن والتفريغ.")
             Text("• إذن البلوتوث يُستخدم للبحث عن البطارية والاتصال بها فقط. في أندرويد 11 وما قبله يشترط النظام إذن الموقع للبحث عن أجهزة البلوتوث؛ التطبيق لا يقرأ موقعك.")
         }

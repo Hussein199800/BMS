@@ -41,7 +41,7 @@ echo "sdk.dir=/path/to/android-sdk" > local.properties
 ## الأمان
 
 - كل كتابة على البلوتوث تمر عبر `ReadRequests.isAllowedRead` التي لا تقبل إلا ثلاثة إطارات قراءة محددة. لا يوجد في الكود أي باني لأوامر التعديل.
-- لا يوجد إذن `INTERNET` في التطبيق.
+- الإنترنت يُستخدم فقط عند الدخول بحساب JBD، وإلى خادم JBD وحده (`cloud-sea.jiabaida.com`)، وعبر قائمة مسارات قراءة مسموحة (`CloudCrypto.isAllowed`). كلمة المرور لا تُحفظ، والرمز يُحفظ مشفّرًا بـ Android Keystore.
 
 ## المصادر
 

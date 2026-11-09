@@ -18,6 +18,15 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+data class CloudState(
+    val signedIn: Boolean = false,
+    val captcha: ByteArray? = null,
+    val captchaUuid: String? = null,
+    val busy: String? = null,
+    val error: String? = null,
+    val report: String? = null,
+)
+
 sealed interface DiagState {
     data object Idle : DiagState
     data class Running(val step: String) : DiagState
@@ -73,6 +82,56 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }.getOrElse { "فشل الفحص بخطأ غير متوقع: ${it.javaClass.simpleName}: ${it.message}" }
             diag.value = DiagState.Done(report)
+        }
+    }
+
+    // ——— سيرفر البطارية ———
+    private val tokens = batari.app.cloud.TokenStore(app)
+    val cloud = MutableStateFlow(CloudState(signedIn = tokens.load() != null))
+
+    private fun appVersion(): String = runCatching {
+        getApplication<Application>().packageManager.getPackageInfo(getApplication<Application>().packageName, 0).versionName
+    }.getOrNull() ?: "?"
+
+    fun loadCaptcha() {
+        if (cloud.value.busy != null) return
+        cloud.value = cloud.value.copy(busy = "جلب رمز التحقق…", error = null)
+        viewModelScope.launch {
+            val r = withContext(Dispatchers.IO) { runCatching { batari.app.cloud.JbdCloud.captcha() } }
+            cloud.value = r.fold(
+                { cloud.value.copy(busy = null, captcha = it.png, captchaUuid = it.uuid) },
+                { cloud.value.copy(busy = null, error = "تعذّر الوصول إلى الخادم. تأكد من الإنترنت. (${it.javaClass.simpleName})") },
+            )
+        }
+    }
+
+    fun cloudLogin(username: String, password: String, code: String) {
+        val uuid = cloud.value.captchaUuid ?: return
+        if (cloud.value.busy != null) return
+        cloud.value = cloud.value.copy(busy = "تسجيل الدخول…", error = null)
+        viewModelScope.launch {
+            val r = withContext(Dispatchers.IO) {
+                runCatching { batari.app.cloud.JbdCloud.login(username, password, code, uuid).getOrThrow() }
+            }
+            r.onSuccess { tokens.save(it); cloud.value = CloudState(signedIn = true) }
+                .onFailure { cloud.value = cloud.value.copy(busy = null, error = it.message ?: "فشل الدخول", captcha = null, captchaUuid = null); loadCaptcha() }
+        }
+    }
+
+    /** يحذف الرمز من هذا الهاتف فقط — لا يُخرجك من تطبيق JBD الرسمي. */
+    fun cloudLogout() { tokens.clear(); cloud.value = CloudState() }
+
+    fun runCloudDiagnostics() {
+        val token = tokens.load() ?: run { cloud.value = CloudState(error = "انتهت الجلسة. سجّل الدخول من جديد."); return }
+        if (cloud.value.busy != null) return
+        cloud.value = cloud.value.copy(busy = "جارٍ الفحص…", error = null, report = null)
+        viewModelScope.launch {
+            val report = withContext(Dispatchers.IO) {
+                runCatching {
+                    batari.app.cloud.CloudDiagnostics.run(token, settings.value.maskIdentifiers, appVersion()) { cloud.value = cloud.value.copy(busy = it) }
+                }.getOrElse { "فشل الفحص: ${it.javaClass.simpleName}: ${it.message}" }
+            }
+            cloud.value = cloud.value.copy(busy = null, report = report)
         }
     }
 

@@ -75,7 +75,15 @@ class ScreensSmokeTest {
     @Test fun historyEmpty() = shot("history_empty") { HistoryScreen(emptyList(), SourceMode.DEMO, 0, {}, {}, {}) }
 
     @Test fun settings() = shot("settings") {
-        SettingsScreen(AppSettings(deviceAddress = "AA:C2:37:0B:47:D7", deviceName = "5YBOP000000000000028"), SourceMode.REAL, {}, {}, {}, {})
+        SettingsScreen(AppSettings(deviceAddress = "AA:C2:37:0B:47:D7", deviceName = "5YBOP000000000000028"), SourceMode.REAL, {}, {}, {}, {}, {})
+    }
+
+    @Test fun cloudLogin() = shot("cloud_login") {
+        batari.app.ui.CloudScreen(batari.app.CloudState(), {}, { _, _, _ -> }, {}, {}, {})
+    }
+
+    @Test fun cloudSignedIn() = shot("cloud_in") {
+        batari.app.ui.CloudScreen(batari.app.CloudState(signedIn = true, report = "[1] قائمة الأجهزة → HTTP 200"), {}, { _, _, _ -> }, {}, {}, {})
     }
 
     @Test fun connectDiagReport() = shot("connect_report") {

@@ -2,7 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- لا يوجد إذن INTERNET: التطبيق لا يستطيع إرسال أي بيانات إلى الشبكة. -->
+    <!-- الإنترنت يُستخدم فقط للاتصال بخادم JBD (cloud-sea.jiabaida.com) إذا سجّل المستخدم دخوله بحسابه. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- أندرويد 12 فما فوق -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"

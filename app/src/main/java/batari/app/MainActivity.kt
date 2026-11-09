@@ -94,6 +94,8 @@ fun AppRoot(vm: MainViewModel) {
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showConnect by rememberSaveable { mutableStateOf(false) }
+    var showCloud by rememberSaveable { mutableStateOf(false) }
+    val cloud by vm.cloud.collectAsStateWithLifecycle()
     val now by produceState(System.currentTimeMillis()) { while (true) { delay(1000); value = System.currentTimeMillis() } }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -106,17 +108,18 @@ fun AppRoot(vm: MainViewModel) {
         }
     }
 
-    BackHandler(enabled = showConnect || tab != 0) {
-        if (showConnect) { vm.scanner.stop(); showConnect = false } else tab = 0
+    BackHandler(enabled = showCloud || showConnect || tab != 0) {
+        if (showCloud) showCloud = false
+        else if (showConnect) { vm.scanner.stop(); showConnect = false } else tab = 0
     }
 
     Scaffold(
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text(if (showConnect) "الاتصال بالبطارية" else TABS[tab], fontWeight = FontWeight.Bold) },
+                    title = { Text(if (showCloud) "سيرفر البطارية" else if (showConnect) "الاتصال بالبطارية" else TABS[tab], fontWeight = FontWeight.Bold) },
                     navigationIcon = {
-                        if (showConnect) IconButton(onClick = { vm.scanner.stop(); showConnect = false }) {
+                        if (showCloud || showConnect) IconButton(onClick = { if (showCloud) showCloud = false else { vm.scanner.stop(); showConnect = false } }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
                         }
                     },
@@ -134,7 +137,7 @@ fun AppRoot(vm: MainViewModel) {
             }
         },
         bottomBar = {
-            if (!showConnect) NavigationBar {
+            if (!showConnect && !showCloud) NavigationBar {
                 val icons = listOf(Icons.Filled.Home, Icons.AutoMirrored.Filled.List, Icons.Filled.Info, Icons.Filled.DateRange, Icons.Filled.Settings)
                 TABS.forEachIndexed { i, label ->
                     NavigationBarItem(
@@ -147,7 +150,9 @@ fun AppRoot(vm: MainViewModel) {
         },
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
-            if (showConnect) {
+            if (showCloud) {
+                batari.app.ui.CloudScreen(cloud, vm::loadCaptcha, vm::cloudLogin, vm::runCloudDiagnostics, vm::cloudLogout) { vm.cloud.value = cloud.copy(report = null) }
+            } else if (showConnect) {
                 ConnectScreen(
                     settings = settings, items = scanItems, scanning = scanning, scanError = scanError, diag = diag,
                     onScan = { vm.scanner.start() }, onStopScan = { vm.scanner.stop() },
@@ -165,6 +170,7 @@ fun AppRoot(vm: MainViewModel) {
                 else -> SettingsScreen(
                     s = settings, mode = mode, update = vm.repo.settings::update,
                     onOpenConnect = { showConnect = true },
+                    onOpenCloud = { showCloud = true },
                     onToggleDemo = { if (it) vm.startDemo() else vm.stopDemo() },
                     onEnableAlert = { if (Build.VERSION.SDK_INT >= 33) notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
                 )
